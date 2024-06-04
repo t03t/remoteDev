@@ -1,37 +1,35 @@
-import { 
+import {
     BASE_API_URL,
+    RESULTS_PER_PAGE,
     state,
     jobListSearchEl,
+    jobListBookmarksEl,
     jobDetailsContentEl,
-    getData,
-    RESULTS_PER_PAGE,
-    jobListBookmarksEl
-} from "../common.js";
+    getData
+} from '../common.js';
+import renderSpinner from './Spinner.js';
+import renderJobDetails from './jobDetails.js';
+import renderError from './Error.js';
 
-import renderSpinner from "./Spinner.js";
-import renderJobDetails from "./jobDetails.js";
-import renderError from "./Error.js";
-
-// RENDER JOB LIST
-// render job items in search job list
 const renderJobList = (whichJobList = 'search') => {
-    // determine the correct selector for job list
-    const joblistEl = whichJobList === 'search' ? jobListSearchEl : jobListBookmarksEl;
+    // determine correct selector for job list (search results list or bookmarks list)
+    const jobListEl = whichJobList === 'search' ? jobListSearchEl : jobListBookmarksEl;
 
     // remove previous job items
-    joblistEl.innerHTML = '';
+    jobListEl.innerHTML = '';
 
-    //determine the job items that must be rendered
+    // determine the job items that should be rendered
     let jobItems;
     if (whichJobList === 'search') {
-        jobItems = state.searchJobItems.slice(state.currentPage * RESULTS_PER_PAGE  - RESULTS_PER_PAGE, state.currentPage * RESULTS_PER_PAGE);
+        jobItems = state.searchJobItems.slice(state.currentPage * RESULTS_PER_PAGE - RESULTS_PER_PAGE, state.currentPage * RESULTS_PER_PAGE);
     } else if (whichJobList === 'bookmarks') {
         jobItems = state.bookmarkJobItems;
     }
 
+    // display job items
     jobItems.forEach(jobItem => {
         const newJobItemHTML = `
-            <li class="job-item ${state.activeJobItem === jobItem.id ? 'job-item--active' : ''}">
+            <li class="job-item ${state.activeJobItem.id === jobItem.id ? 'job-item--active' : ''}">
                 <a class="job-item__link" href="${jobItem.id}">
                     <div class="job-item__badge">${jobItem.badgeLetters}</div>
                     <div class="job-item__middle">
@@ -44,31 +42,27 @@ const renderJobList = (whichJobList = 'search') => {
                         </div>
                     </div>
                     <div class="job-item__right">
-                        <i class="fa-solid fa-bookmark job-item__bookmark-icon"></i>
+                        <i class="fa-solid fa-bookmark job-item__bookmark-icon ${state.bookmarkJobItems.some(bookmarkJobItem => bookmarkJobItem.id === jobItem.id) && 'job-item__bookmark-icon--bookmarked'}"></i>
                         <time class="job-item__time">${jobItem.daysAgo}d</time>
                     </div>
                 </a>
             </li>
         `;
-        joblistEl.insertAdjacentHTML('beforeend', newJobItemHTML);
+        jobListEl.insertAdjacentHTML('beforeend', newJobItemHTML);
     });
-}
+};
 
-// JOB LISTING COMPONENT
 const clickHandler = async event => {
-    // prevent default
+    // prevent default behavior (navigation)
     event.preventDefault();
 
-    // get the job item that was clicked
+    // get clicked job item element
     const jobItemEl = event.target.closest('.job-item');
-    
-    // remove the preexisting item--active class from job list element
+
+    // remove the active class from previously active job items
     document.querySelectorAll('.job-item--active').forEach(jobItemWithActiveClass => jobItemWithActiveClass.classList.remove('job-item--active'));
 
-    // add active class to jobItemEl
-    jobItemEl.classList.add('job-item--active');
-
-    // empty job details selection
+    // empty the job details section
     jobDetailsContentEl.innerHTML = '';
 
     // render spinner
@@ -78,29 +72,31 @@ const clickHandler = async event => {
     const id = jobItemEl.children[0].getAttribute('href');
 
     // update state
-    state.activeJobItem = state.searchJobItems.find(jobItem => jobItem.id === +id);
+    const allJobItems = [...state.searchJobItems, ...state.bookmarkJobItems];
+    state.activeJobItem = allJobItems.find(jobItem => jobItem.id === +id);
 
-    // add id to URL
+    // render search job list
+    renderJobList();
+
+    // add id to url
     history.pushState(null, '', `/#${id}`);
 
     try {
         // fetch job item data
         const data = await getData(`${BASE_API_URL}/jobs/${id}`);
+    
+        // extract job item
         const { jobItem } = data;
-
-        // update state
-        state.activeJobItem = jobItem;
-
-        // remove spinner visible
+    
+        // remove spinner
         renderSpinner('job-details');
-
+    
         // render job details
         renderJobDetails(jobItem);
-    } catch(error) {
+    } catch (error) {
         renderSpinner('job-details');
         renderError(error.message);
     }
-
 };
 
 jobListSearchEl.addEventListener('click', clickHandler);
